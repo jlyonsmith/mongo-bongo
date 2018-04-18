@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "A tool for easy MongoDB database configuration and backup",
   "bin": {
-    "snap": "dist/bongo.js"
+    "bongo": "dist/bongo.js"
   },
   "files": [
     "dist/**"

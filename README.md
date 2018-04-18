@@ -51,7 +51,7 @@ After running `bongo users admin` you will have a `~/.bongo/credentials.json5` f
 
 _NOTE: If this is alarming to you, realize that it is no different from that way the systems like AWS work when they store login credentials in `~/.aws/credentials` files.  The file has the mode set to allow only the user that creates it to read and modify it.  Just make sure that the security for account is good, by using only SSH authentication for example._
 
-## Other Databeses
+## Other Databases
 
 To create the approriate users for other databases, with security enabled:
 
