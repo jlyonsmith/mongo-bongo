@@ -87,6 +87,6 @@ Restores the database, dropping any existing tables.  You can set the `admin` an
 
 ## Other
 
-The tool generates cryptographically strong 16 character alphanumeric passwords that should not give any problems when used on the command line or in URI's.
+The tool generates cryptographically strong 16 character alphanumeric passwords that should not give any problems when used on the command line or in MongoDB URI's with passwords, e.g. `mongodb://user:zY99Ab8cddf8e01x@localhost:27107/db-name`.
 
 The `bongo mongo` command reads the `mongod.conf` file as YAML and rewrites it _stripping any comments_  If comments in the `.conf` file are important to you then please submit a pull request to add that functionality.
