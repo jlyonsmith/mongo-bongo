@@ -10,10 +10,10 @@ Note, this tool has been tested to work with [MongoDB 3.6](https://docs.mongodb.
 
 ## Users
 
-In an authenticated database, users are stored in the `admin` database.  There are two types of users:
+In an authenticated database, users are stored in the `admin` database.  As far as this tool is concerned, there are two categories of users:
 
-- Administrative users; `root`, `backup` and `restore`
-- Database users; `admin` and `user`
+- **Administrative Users:** `root`, `backup` and `restore`.
+- **Database Users:** `admin` and `user`.
 
 `root` user is only used to manage users across databases. `backup` and `restore` are used for backing up and restoring databases respectively.
 
@@ -47,9 +47,9 @@ bongo mongo --auth --bind-all
 
 ## Credentials File
 
-After running `bongo users ...` you will have a `~/.bongo/credentials.json5` file that contains the users passwords.  Having this file on makes it easy to find the appropriate passwords to your MongoDB URI's when configuring your API services.
+After running `bongo users admin` you will have a `~/.bongo/credentials.json5` file that contains the users passwords.  Having this file makes it easy to find the appropriate passwords to add to your MongoDB URI's when configuring your API services.
 
-_NOTE: If this is alarming to you, realize that it is no different from that way the systems like, for example, AWS work when they store login credentials in `~/.aws/credentials` files.  The file has the mode set to only allow the user that creates it to read and modify it.  Just make sure that the security for account is good, by using only SSH authentication for example._
+_NOTE: If this is alarming to you, realize that it is no different from that way the systems like AWS work when they store login credentials in `~/.aws/credentials` files.  The file has the mode set to allow only the user that creates it to read and modify it.  Just make sure that the security for account is good, by using only SSH authentication for example._
 
 ## Other Databeses
 
@@ -84,3 +84,9 @@ bongo restore <db> <archive>
 ```
 
 Restores the database, dropping any existing tables.  You can set the `admin` and `user` users with `bongo` as above if needed, or just copy over the `credentials.json` file manually.
+
+## Other
+
+The tool generates cryptographically strong 16 character alphanumeric passwords that should not give any problems when used on the command line or in URI's.
+
+The `bongo mongo` command reads the `mongod.conf` file as YAML and rewrites it _stripping any comments_  If comments in the `.conf` file are important to you then please submit a pull request to add that functionality.
