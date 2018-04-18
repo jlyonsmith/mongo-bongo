@@ -6,7 +6,7 @@ An _opinionated_ tool for managing MongoDB databases that are placed behind REST
 - Manage user passwords
 - Perform backups and restores
 
-Note, this tool has been tested to work with MongoDB 3.4 and above, macOS with homebrew and Ubuntu 16.
+Note, this tool has been tested to work with [MongoDB 3.6](https://docs.mongodb.com/manual/) and above, macOS with [Homebrew](https://brew.sh/), and Ubuntu 16.04.
 
 ## Users
 
