@@ -468,7 +468,7 @@ Options:
 `)
           return 0
         }
-        if (dbName === "admin") {
+        if (this.args._[1] === "admin") {
           await this.usersAdmin()
         } else {
           await this.users(this.args._[1])
