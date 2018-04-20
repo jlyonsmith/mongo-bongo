@@ -420,7 +420,7 @@ quit()
       modifyMongoConf("/usr/local/etc/mongod.conf", auth, bindAll)
 
       try {
-        await cp.exec("brew restart mongodb")
+        await cp.exec("brew services restart mongodb")
       } catch (error) {
         this.log.error(`Unable to restart 'mongodb' service. ${error.message}`)
       }
