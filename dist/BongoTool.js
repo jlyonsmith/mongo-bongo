@@ -400,7 +400,7 @@ quit()
       modifyMongoConf("/usr/local/etc/mongod.conf", auth, bindAll);
 
       try {
-        await _child_process2.default.exec("brew restart mongodb");
+        await _child_process2.default.exec("brew services restart mongodb");
       } catch (error) {
         this.log.error(`Unable to restart 'mongodb' service. ${error.message}`);
       }
