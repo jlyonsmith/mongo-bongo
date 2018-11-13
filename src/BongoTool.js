@@ -81,6 +81,10 @@ export class BongoTool {
       return
     }
 
+    this.log.info(
+      "Adding admin, user, backup and restore users to ${dbName} database"
+    )
+
     let hasSecurity = false
 
     try {
@@ -124,7 +128,9 @@ quit()
         )
         this.log.info(await streamToString(result.stdout))
       } catch (error) {
-        this.log.error(`Unable to create '${dbName}' database users`)
+        this.log.error(
+          `Unable to create '${dbName}' database users. ${error.message}`
+        )
         return
       } finally {
         tf.cleanup()
@@ -206,6 +212,8 @@ quit()
   async usersAdmin() {
     let credentials = await this.readCredentials()
     let result, tf, passwords
+
+    this.log.info("Adding root user to admin database")
 
     try {
       result = await promisify(cp.exec)('mongo --eval "db.getUsers()" --quiet')
@@ -462,7 +470,7 @@ Ensures that the users 'admin' & 'user' exist on regular database, and 'root',
 
 Options:
 
--new-passwords   Generate new passwords for existing users.
+  --new-passwords   Generate new passwords for existing users.
 `)
           return 0
         }
