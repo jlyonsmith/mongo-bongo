@@ -12,7 +12,31 @@ import tmp from "tmp-promise"
 import { promisify } from "util"
 import moment from "moment"
 import yaml from "js-yaml"
-import streamToString from "stream-to-string"
+import stream from "stream"
+
+function streamToString(readable) {
+  if (!(readable instanceof stream.Readable)) {
+    return readable.toString()
+  }
+
+  return new Promise((resolve, reject) => {
+    let string = ""
+
+    readable.on("readable", (buffer) => {
+      string += buffer.read().toString()
+    })
+
+    readable.on("end", () => {
+      resolve(string)
+    })
+
+    readable.on("error", (error) => {
+      reject(error)
+    })
+
+    readable.pipe(writeable)
+  })
+}
 
 export class BongoTool {
   constructor(toolName, log) {
@@ -159,7 +183,11 @@ quit()
       )
       this.log.info(await streamToString(result.stdout))
     } catch (error) {
-      this.log.error(`Unable to confirm existing '${dbName}' database users.`)
+      this.log.error(
+        `Unable to confirm existing '${dbName}' database users. ${
+          error.message
+        }`
+      )
       return
     } finally {
       tf.cleanup()
@@ -243,7 +271,6 @@ quit()
       )
       try {
         result = await promisify(cp.exec)(`mongo ${tf.path} --quiet`)
-        this.log.info(await streamToString(result.stdout))
       } catch (error) {
         this.log.error(
           `Unable to create 'root' database users. ${error.message}`
@@ -253,6 +280,8 @@ quit()
         tf.cleanup()
         tf = null
       }
+
+      this.log.info(await streamToString(result.stdout))
 
       credentials.admin = passwords
       await this.writeCredentials(credentials)
@@ -274,14 +303,17 @@ quit()
 
     try {
       result = await promisify(cp.exec)(`mongo ${tf.path} --quiet`)
-      this.log.info(await streamToString(result.stdout))
     } catch (error) {
-      this.log.error("Unable to confirm existing 'admin' database users.")
+      this.log.error(
+        `Unable to confirm existing 'admin' database users. ${error.message}`
+      )
       return
     } finally {
       tf.cleanup()
       tf = null
     }
+
+    this.log.info(await streamToString(result.stdout))
 
     if (!this.args["new-passwords"]) {
       this.log.info(
