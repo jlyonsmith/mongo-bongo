@@ -33,11 +33,31 @@ var _moment = _interopRequireDefault(require("moment"));
 
 var _jsYaml = _interopRequireDefault(require("js-yaml"));
 
-var _streamToString = _interopRequireDefault(require("stream-to-string"));
+var _stream = _interopRequireDefault(require("stream"));
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
+
+function streamToString(readable) {
+  if (!(readable instanceof _stream.default.Readable)) {
+    return readable.toString();
+  }
+
+  return new Promise((resolve, reject) => {
+    let string = "";
+    readable.on("readable", buffer => {
+      string += buffer.read().toString();
+    });
+    readable.on("end", () => {
+      resolve(string);
+    });
+    readable.on("error", error => {
+      reject(error);
+    });
+    readable.pipe(writeable);
+  });
+}
 
 class BongoTool {
   constructor(toolName, log) {
@@ -102,6 +122,7 @@ class BongoTool {
       return;
     }
 
+    this.log.info("Adding admin and user users to ${dbName} database");
     let hasSecurity = false;
 
     try {
@@ -131,9 +152,9 @@ quit()
 
       try {
         result = await (0, _util.promisify)(_child_process.default.exec)(`mongo -u root -p ${credentials.admin.root} --authenticationDatabase admin --quiet ${tf.path}`);
-        this.log.info((await (0, _streamToString.default)(result.stdout)));
+        this.log.info((await streamToString(result.stdout)));
       } catch (error) {
-        this.log.error(`Unable to create '${dbName}' database users`);
+        this.log.error(`Unable to create '${dbName}' database users. ${error.message}`);
         return;
       } finally {
         tf.cleanup();
@@ -157,9 +178,9 @@ quit()
 
     try {
       result = await (0, _util.promisify)(_child_process.default.exec)(`mongo -u root -p ${credentials.admin.root} --authenticationDatabase admin --quiet ${tf.path}`);
-      this.log.info((await (0, _streamToString.default)(result.stdout)));
+      this.log.info((await streamToString(result.stdout)));
     } catch (error) {
-      this.log.error(`Unable to confirm existing '${dbName}' database users.`);
+      this.log.error(`Unable to confirm existing '${dbName}' database users. ${error.message}`);
       return;
     } finally {
       tf.cleanup();
@@ -200,6 +221,7 @@ quit()
   async usersAdmin() {
     let credentials = await this.readCredentials();
     let result, tf, passwords;
+    this.log.info("Adding root, backup and restore user to admin database");
 
     try {
       result = await (0, _util.promisify)(_child_process.default.exec)('mongo --eval "db.getUsers()" --quiet');
@@ -226,15 +248,15 @@ quit()
 
       try {
         result = await (0, _util.promisify)(_child_process.default.exec)(`mongo ${tf.path} --quiet`);
-        this.log.info((await (0, _streamToString.default)(result.stdout)));
       } catch (error) {
-        this.log.error("Unable to create 'admin' database users");
+        this.log.error(`Unable to create 'root' database users. ${error.message}`);
         return;
       } finally {
         tf.cleanup();
         tf = null;
       }
 
+      this.log.info((await streamToString(result.stdout)));
       credentials.admin = passwords;
       await this.writeCredentials(credentials);
       return;
@@ -253,14 +275,15 @@ quit()
 
     try {
       result = await (0, _util.promisify)(_child_process.default.exec)(`mongo ${tf.path} --quiet`);
-      this.log.info((await (0, _streamToString.default)(result.stdout)));
     } catch (error) {
-      this.log.error("Unable to confirm existing 'admin' database users.");
+      this.log.error(`Unable to confirm existing 'admin' database users. ${error.message}`);
       return;
     } finally {
       tf.cleanup();
       tf = null;
     }
+
+    this.log.info((await streamToString(result.stdout)));
 
     if (!this.args["new-passwords"]) {
       this.log.info("MongoDB 'admin' database users 'root', 'backup' & 'restore' confirmed");
@@ -303,7 +326,7 @@ quit()
 
     try {
       const result = await (0, _util.promisify)(_child_process.default.exec)(`mongodump --gzip --archive=${backupFile} --db ${dbName} -u backup -p ${passwords.backup} --authenticationDatabase=admin`);
-      this.log.info((await (0, _streamToString.default)(result.stdout)));
+      this.log.info((await streamToString(result.stdout)));
     } catch (error) {
       this.log.error(`Unable to backup database '${dbName}'. ${error.message}`);
       return;
@@ -318,7 +341,7 @@ quit()
 
     try {
       const result = await (0, _util.promisify)(_child_process.default.exec)(`mongorestore --gzip --archive=${backupFile} --drop --db ${dbName} -u restore -p ${passwords.restore} --authenticationDatabase=admin`);
-      this.log.info((await (0, _streamToString.default)(result.stdout)));
+      this.log.info((await streamToString(result.stdout)));
     } catch (error) {
       this.log.error(`Unable to restore database '${dbName}'. ${error.message}`);
       return;
@@ -367,7 +390,7 @@ quit()
         return;
       }
 
-      if (!(await (0, _streamToString.default)(result.stdout)).match(/Ubuntu 1(6|8)\./)) {
+      if (!(await streamToString(result.stdout)).match(/Ubuntu 1(6|8)\./)) {
         this.log.warning("This release of Linux has not been tested");
       }
 
@@ -423,7 +446,7 @@ Ensures that the users 'admin' & 'user' exist on regular database, and 'root',
 
 Options:
 
--new-passwords   Generate new passwords for existing users.
+  --new-passwords   Generate new passwords for existing users.
 `);
           return 0;
         }
