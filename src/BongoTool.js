@@ -81,9 +81,7 @@ export class BongoTool {
       return
     }
 
-    this.log.info(
-      "Adding admin, user, backup and restore users to ${dbName} database"
-    )
+    this.log.info("Adding admin and user users to ${dbName} database")
 
     let hasSecurity = false
 
@@ -213,7 +211,7 @@ quit()
     let credentials = await this.readCredentials()
     let result, tf, passwords
 
-    this.log.info("Adding root user to admin database")
+    this.log.info("Adding root, backup and restore user to admin database")
 
     try {
       result = await promisify(cp.exec)('mongo --eval "db.getUsers()" --quiet')
@@ -247,7 +245,9 @@ quit()
         result = await promisify(cp.exec)(`mongo ${tf.path} --quiet`)
         this.log.info(await streamToString(result.stdout))
       } catch (error) {
-        this.log.error("Unable to create 'admin' database users")
+        this.log.error(
+          `Unable to create 'root' database users. ${error.message}`
+        )
         return
       } finally {
         tf.cleanup()
