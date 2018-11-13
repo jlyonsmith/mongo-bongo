@@ -1,7 +1,5 @@
-import { sync as globSync } from "glob"
 import parseArgs from "minimist"
 import { fullVersion } from "./version"
-import util from "util"
 import fs from "fs-extra"
 import path from "path"
 import os from "os"
@@ -14,6 +12,7 @@ import tmp from "tmp-promise"
 import { promisify } from "util"
 import moment from "moment"
 import yaml from "js-yaml"
+import streamToString from "stream-to-string"
 
 export class BongoTool {
   constructor(toolName, log) {
@@ -123,7 +122,7 @@ quit()
             credentials.admin.root
           } --authenticationDatabase admin --quiet ${tf.path}`
         )
-        this.log.info(result.stdout)
+        this.log.info(await streamToString(result.stdout))
       } catch (error) {
         this.log.error(`Unable to create '${dbName}' database users`)
         return
@@ -154,7 +153,7 @@ quit()
           credentials.admin.root
         } --authenticationDatabase admin --quiet ${tf.path}`
       )
-      this.log.info(result.stdout)
+      this.log.info(await streamToString(result.stdout))
     } catch (error) {
       this.log.error(`Unable to confirm existing '${dbName}' database users.`)
       return
@@ -238,7 +237,7 @@ quit()
       )
       try {
         result = await promisify(cp.exec)(`mongo ${tf.path} --quiet`)
-        this.log.info(result.stdout)
+        this.log.info(await streamToString(result.stdout))
       } catch (error) {
         this.log.error("Unable to create 'admin' database users")
         return
@@ -267,7 +266,7 @@ quit()
 
     try {
       result = await promisify(cp.exec)(`mongo ${tf.path} --quiet`)
-      this.log.info(result.stdout)
+      this.log.info(await streamToString(result.stdout))
     } catch (error) {
       this.log.error("Unable to confirm existing 'admin' database users.")
       return
@@ -329,7 +328,7 @@ quit()
           passwords.backup
         } --authenticationDatabase=admin`
       )
-      this.log.info(result.stdout)
+      this.log.info(await streamToString(result.stdout))
     } catch (error) {
       this.log.error(`Unable to backup database '${dbName}'. ${error.message}`)
       return
@@ -348,7 +347,7 @@ quit()
           passwords.restore
         } --authenticationDatabase=admin`
       )
-      this.log.info(result.stdout)
+      this.log.info(await streamToString(result.stdout))
     } catch (error) {
       this.log.error(`Unable to restore database '${dbName}'. ${error.message}`)
       return
@@ -402,9 +401,8 @@ quit()
         return
       }
 
-      if (!result.stdout.match(/Ubuntu 16\.04/)) {
-        this.log.error("This release of Linux has not been tested")
-        return
+      if (!(await streamToString(result.stdout)).match(/Ubuntu 1(6|8)\./)) {
+        this.log.warning("This release of Linux has not been tested")
       }
 
       modifyMongoConf("/etc/mongod.conf", auth, bindAll)
