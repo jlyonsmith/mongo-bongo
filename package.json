@@ -1,6 +1,6 @@
 {
   "name": "mongo-bongo",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A tool for easy MongoDB database configuration and backup",
   "bin": {
     "bongo": "dist/bongo.js"

@@ -3,63 +3,41 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.BongoTool = undefined;
+exports.BongoTool = void 0;
 
-var _glob = require("glob");
-
-var _minimist = require("minimist");
-
-var _minimist2 = _interopRequireDefault(_minimist);
+var _minimist = _interopRequireDefault(require("minimist"));
 
 var _version = require("./version");
 
-var _util = require("util");
+var _fsExtra = _interopRequireDefault(require("fs-extra"));
 
-var _util2 = _interopRequireDefault(_util);
+var _path = _interopRequireDefault(require("path"));
 
-var _fsExtra = require("fs-extra");
+var _os = _interopRequireDefault(require("os"));
 
-var _fsExtra2 = _interopRequireDefault(_fsExtra);
+var _process = _interopRequireDefault(require("process"));
 
-var _path = require("path");
-
-var _path2 = _interopRequireDefault(_path);
-
-var _os = require("os");
-
-var _os2 = _interopRequireDefault(_os);
-
-var _process = require("process");
-
-var _process2 = _interopRequireDefault(_process);
-
-var _child_process = require("child_process");
-
-var _child_process2 = _interopRequireDefault(_child_process);
+var _child_process = _interopRequireDefault(require("child_process"));
 
 var _commandExists = require("command-exists");
 
-var _json = require("json5");
+var _json = _interopRequireDefault(require("json5"));
 
-var _json2 = _interopRequireDefault(_json);
+var _randomatic = _interopRequireDefault(require("randomatic"));
 
-var _randomatic = require("randomatic");
+var _tmpPromise = _interopRequireDefault(require("tmp-promise"));
 
-var _randomatic2 = _interopRequireDefault(_randomatic);
+var _util = require("util");
 
-var _tmpPromise = require("tmp-promise");
+var _moment = _interopRequireDefault(require("moment"));
 
-var _tmpPromise2 = _interopRequireDefault(_tmpPromise);
+var _jsYaml = _interopRequireDefault(require("js-yaml"));
 
-var _moment = require("moment");
-
-var _moment2 = _interopRequireDefault(_moment);
-
-var _jsYaml = require("js-yaml");
-
-var _jsYaml2 = _interopRequireDefault(_jsYaml);
+var _streamToString = _interopRequireDefault(require("stream-to-string"));
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
 
 class BongoTool {
   constructor(toolName, log) {
@@ -76,7 +54,7 @@ class BongoTool {
   }
 
   static getPassword() {
-    return (0, _randomatic2.default)("Aa0", 16);
+    return (0, _randomatic.default)("Aa0", 16);
   }
 
   static generateAdminPasswords(dbName) {
@@ -97,21 +75,22 @@ class BongoTool {
   async readCredentials() {
     let credentials = {};
 
-    if (_fsExtra2.default.existsSync(BongoTool.credentialsFile)) {
-      const json = await _fsExtra2.default.readFile(BongoTool.credentialsFile, {
+    if (_fsExtra.default.existsSync(BongoTool.credentialsFile)) {
+      const json = await _fsExtra.default.readFile(BongoTool.credentialsFile, {
         encoding: "utf8"
       });
-
-      credentials = _json2.default.parse(json);
+      credentials = _json.default.parse(json);
     }
 
     return credentials;
   }
 
   async writeCredentials(credentials) {
-    const json = _json2.default.stringify(credentials, null, "  ");
+    const json = _json.default.stringify(credentials, null, "  ");
 
-    await _fsExtra2.default.writeFile(BongoTool.credentialsFile, json, { mode: 0o600 });
+    await _fsExtra.default.writeFile(BongoTool.credentialsFile, json, {
+      mode: 0o600
+    });
   }
 
   async users(dbName) {
@@ -126,7 +105,7 @@ class BongoTool {
     let hasSecurity = false;
 
     try {
-      result = await (0, _util.promisify)(_child_process2.default.exec)('mongo --eval "db.getUsers()"');
+      result = await (0, _util.promisify)(_child_process.default.exec)('mongo --eval "db.getUsers()"');
     } catch (error) {
       hasSecurity = true;
     }
@@ -138,9 +117,10 @@ class BongoTool {
 
     if (!credentials[dbName]) {
       passwords = BongoTool.generatePasswords();
-      tf = await _tmpPromise2.default.file({ postfix: ".js" });
-
-      await _fsExtra2.default.writeFile(tf.fd, `
+      tf = await _tmpPromise.default.file({
+        postfix: ".js"
+      });
+      await _fsExtra.default.writeFile(tf.fd, `
 db = db.getSiblingDB("${dbName}")
 db.dropUser('admin')
 db.createUser({user:"admin",pwd:"${passwords.admin}",roles:["readWrite", "dbAdmin", "userAdmin"]})
@@ -150,8 +130,8 @@ quit()
 `);
 
       try {
-        result = await (0, _util.promisify)(_child_process2.default.exec)(`mongo -u root -p ${credentials.admin.root} --authenticationDatabase admin --quiet ${tf.path}`);
-        this.log.info(result.stdout);
+        result = await (0, _util.promisify)(_child_process.default.exec)(`mongo -u root -p ${credentials.admin.root} --authenticationDatabase admin --quiet ${tf.path}`);
+        this.log.info((await (0, _streamToString.default)(result.stdout)));
       } catch (error) {
         this.log.error(`Unable to create '${dbName}' database users`);
         return;
@@ -165,17 +145,19 @@ quit()
       return;
     }
 
-    tf = await _tmpPromise2.default.file({ postfix: ".js" });
-
-    await _fsExtra2.default.writeFile(tf.fd, `
+    tf = await _tmpPromise.default.file({
+      postfix: ".js"
+    });
+    await _fsExtra.default.writeFile(tf.fd, `
 db = db.getSiblingDB("${dbName}")
 assert(db.getUser("admin"))
 assert(db.getUser("user"))
 quit()
 `);
+
     try {
-      result = await (0, _util.promisify)(_child_process2.default.exec)(`mongo -u root -p ${credentials.admin.root} --authenticationDatabase admin --quiet ${tf.path}`);
-      this.log.info(result.stdout);
+      result = await (0, _util.promisify)(_child_process.default.exec)(`mongo -u root -p ${credentials.admin.root} --authenticationDatabase admin --quiet ${tf.path}`);
+      this.log.info((await (0, _streamToString.default)(result.stdout)));
     } catch (error) {
       this.log.error(`Unable to confirm existing '${dbName}' database users.`);
       return;
@@ -190,10 +172,10 @@ quit()
     }
 
     passwords = BongoTool.generatePasswords();
-
-    tf = await _tmpPromise2.default.file({ postfix: ".js" });
-
-    await _fsExtra2.default.writeFile(tf.fd, `
+    tf = await _tmpPromise.default.file({
+      postfix: ".js"
+    });
+    await _fsExtra.default.writeFile(tf.fd, `
 db = db.getSiblingDB("${dbName}")
 db.changeUserPassword("admin", "${passwords.admin}")
 db.changeUserPassword("user", "${passwords.user}")
@@ -201,7 +183,7 @@ quit()
 `);
 
     try {
-      result = await (0, _util.promisify)(_child_process2.default.exec)(`mongo -u root -p ${credentials.admin.root} --authenticationDatabase admin --quiet ${tf.path}`);
+      result = await (0, _util.promisify)(_child_process.default.exec)(`mongo -u root -p ${credentials.admin.root} --authenticationDatabase admin --quiet ${tf.path}`);
     } catch (error) {
       this.log.error(`Unable to change '${dbName}' database user passwords.`);
       return;
@@ -212,7 +194,6 @@ quit()
 
     credentials[dbName] = passwords;
     await this.writeCredentials(credentials);
-
     this.log.info(`MongoDB '${dbName}' database user passwords changed`);
   }
 
@@ -221,7 +202,7 @@ quit()
     let result, tf, passwords;
 
     try {
-      result = await (0, _util.promisify)(_child_process2.default.exec)('mongo --eval "db.getUsers()" --quiet');
+      result = await (0, _util.promisify)(_child_process.default.exec)('mongo --eval "db.getUsers()" --quiet');
     } catch (error) {
       this.log.error("You must disable MongoDB security initialize the admin database");
       return;
@@ -229,9 +210,10 @@ quit()
 
     if (!credentials.admin) {
       passwords = BongoTool.generateAdminPasswords();
-      tf = await _tmpPromise2.default.file({ postfix: ".js" });
-
-      await _fsExtra2.default.writeFile(tf.fd, `
+      tf = await _tmpPromise.default.file({
+        postfix: ".js"
+      });
+      await _fsExtra.default.writeFile(tf.fd, `
 db = db.getSiblingDB('admin')
 db.dropUser('root')
 db.createUser({user:"root",pwd:"${passwords.root}",roles:["userAdminAnyDatabase","readAnyDatabase","clusterAdmin"]})
@@ -241,9 +223,10 @@ db.dropUser('restore')
 db.createUser({user:"restore",pwd:"${passwords.restore}",roles:["restore"]})
 quit()
 `);
+
       try {
-        result = await (0, _util.promisify)(_child_process2.default.exec)(`mongo ${tf.path} --quiet`);
-        this.log.info(result.stdout);
+        result = await (0, _util.promisify)(_child_process.default.exec)(`mongo ${tf.path} --quiet`);
+        this.log.info((await (0, _streamToString.default)(result.stdout)));
       } catch (error) {
         this.log.error("Unable to create 'admin' database users");
         return;
@@ -257,9 +240,10 @@ quit()
       return;
     }
 
-    tf = await _tmpPromise2.default.file({ postfix: ".js" });
-
-    await _fsExtra2.default.writeFile(tf.fd, `
+    tf = await _tmpPromise.default.file({
+      postfix: ".js"
+    });
+    await _fsExtra.default.writeFile(tf.fd, `
 db = db.getSiblingDB("admin")
 assert(db.getUser("root"))
 assert(db.getUser("backup"))
@@ -268,8 +252,8 @@ quit()
 `);
 
     try {
-      result = await (0, _util.promisify)(_child_process2.default.exec)(`mongo ${tf.path} --quiet`);
-      this.log.info(result.stdout);
+      result = await (0, _util.promisify)(_child_process.default.exec)(`mongo ${tf.path} --quiet`);
+      this.log.info((await (0, _streamToString.default)(result.stdout)));
     } catch (error) {
       this.log.error("Unable to confirm existing 'admin' database users.");
       return;
@@ -284,10 +268,10 @@ quit()
     }
 
     passwords = BongoTool.generateAdminPasswords();
-
-    tf = await _tmpPromise2.default.file({ postfix: ".js" });
-
-    await _fsExtra2.default.writeFile(tf.fd, `
+    tf = await _tmpPromise.default.file({
+      postfix: ".js"
+    });
+    await _fsExtra.default.writeFile(tf.fd, `
 db = db.getSiblingDB("admin")
 assert.eq(db, "admin")
 db.changeUserPassword("root", "${passwords.root}")
@@ -295,8 +279,9 @@ db.changeUserPassword("backup", "${passwords.backup}")
 db.changeUserPassword("restore", "${passwords.restore}")
 quit()
 `);
+
     try {
-      result = await (0, _util.promisify)(_child_process2.default.exec)(`mongo ${tf.path} --quiet`);
+      result = await (0, _util.promisify)(_child_process.default.exec)(`mongo ${tf.path} --quiet`);
     } catch (error) {
       this.log.error("Unable to change 'admin' database user passwords.");
       return;
@@ -307,19 +292,18 @@ quit()
 
     credentials.admin = passwords;
     await this.writeCredentials(credentials);
-
     this.log.info("MongoDB 'admin' database user passwords changed");
   }
 
   async backup(dbName) {
     const credentials = await this.readCredentials();
     const passwords = credentials.admin;
-    const dateTime = (0, _moment2.default)().utc().format("YYYYMMDD-hhmmss") + "Z";
+    const dateTime = (0, _moment.default)().utc().format("YYYYMMDD-hhmmss") + "Z";
     const backupFile = `${dbName}-${dateTime}.archive`;
 
     try {
-      const result = await (0, _util.promisify)(_child_process2.default.exec)(`mongodump --gzip --archive=${backupFile} --db ${dbName} -u backup -p ${passwords.backup} --authenticationDatabase=admin`);
-      this.log.info(result.stdout);
+      const result = await (0, _util.promisify)(_child_process.default.exec)(`mongodump --gzip --archive=${backupFile} --db ${dbName} -u backup -p ${passwords.backup} --authenticationDatabase=admin`);
+      this.log.info((await (0, _streamToString.default)(result.stdout)));
     } catch (error) {
       this.log.error(`Unable to backup database '${dbName}'. ${error.message}`);
       return;
@@ -333,8 +317,8 @@ quit()
     const passwords = credentials.admin;
 
     try {
-      const result = await (0, _util.promisify)(_child_process2.default.exec)(`mongorestore --gzip --archive=${backupFile} --drop --db ${dbName} -u restore -p ${passwords.restore} --authenticationDatabase=admin`);
-      this.log.info(result.stdout);
+      const result = await (0, _util.promisify)(_child_process.default.exec)(`mongorestore --gzip --archive=${backupFile} --drop --db ${dbName} -u restore -p ${passwords.restore} --authenticationDatabase=admin`);
+      this.log.info((await (0, _streamToString.default)(result.stdout)));
     } catch (error) {
       this.log.error(`Unable to restore database '${dbName}'. ${error.message}`);
       return;
@@ -344,9 +328,12 @@ quit()
   }
 
   async mongo(auth, bindAll) {
-    const platform = _os2.default.platform();
+    const platform = _os.default.platform();
+
     const modifyMongoConf = async (mongoConfFile, auth, bindAll) => {
-      let conf = _jsYaml2.default.safeLoad((await _fsExtra2.default.readFile(mongoConfFile, { encoding: "utf8" })));
+      let conf = _jsYaml.default.safeLoad((await _fsExtra.default.readFile(mongoConfFile, {
+        encoding: "utf8"
+      })));
 
       conf.security.authorization = auth ? "enabled" : "disabled";
 
@@ -356,51 +343,47 @@ quit()
         conf.net.bindIp = "127.0.0.1";
       }
 
-      const confYaml = _jsYaml2.default.safeDump(conf);
+      const confYaml = _jsYaml.default.safeDump(conf);
 
-      await _fsExtra2.default.writeFile(mongoConfFile, confYaml);
-
+      await _fsExtra.default.writeFile(mongoConfFile, confYaml);
       return confYaml;
     };
 
     this.log.info(`Attempting to ${auth ? "enable" : "disable"} security and bind to ${bindAll ? "all" : "localhost"} IP address${bindAll ? "es" : ""}`);
 
     if (platform === "linux") {
-      if (_os2.default.userInfo().username !== "root") {
+      if (_os.default.userInfo().username !== "root") {
         this.log.error("Must run this command under sudo on Linux");
         return;
       }
 
       this.ensureCommands(["systemctl", "lsb_release"]);
-
       let result = null;
 
       try {
-        result = await _child_process2.default.exec("lsb_release -a");
+        result = await _child_process.default.exec("lsb_release -a");
       } catch (error) {
         this.log.error(`Cannot determine Linux release. ${error.message}`);
         return;
       }
 
-      if (!result.stdout.match(/Ubuntu 16\.04/)) {
-        this.log.error("This release of Linux has not been tested");
-        return;
+      if (!(await (0, _streamToString.default)(result.stdout)).match(/Ubuntu 1(6|8)\./)) {
+        this.log.warning("This release of Linux has not been tested");
       }
 
       modifyMongoConf("/etc/mongod.conf", auth, bindAll);
 
       try {
-        result = await _child_process2.default.exec("systemctl restart mongod");
+        result = await _child_process.default.exec("systemctl restart mongod");
       } catch (error) {
         this.log.error(`Cannot restart 'mongod' service. ${error.message}`);
       }
     } else if (platform === "darwin") {
       this.ensureCommands(["brew"]);
-
       modifyMongoConf("/usr/local/etc/mongod.conf", auth, bindAll);
 
       try {
-        await _child_process2.default.exec("brew services restart mongodb");
+        await _child_process.default.exec("brew services restart mongodb");
       } catch (error) {
         this.log.error(`Unable to restart 'mongodb' service. ${error.message}`);
       }
@@ -416,7 +399,7 @@ quit()
     const options = {
       boolean: ["help", "version", "new-passwords", "auth", "bind-all"]
     };
-    this.args = (0, _minimist2.default)(argv, options);
+    this.args = (0, _minimist.default)(argv, options);
 
     if (this.args.version) {
       this.log.info(`${_version.fullVersion}`);
@@ -424,10 +407,8 @@ quit()
     }
 
     let command = this.args._[0];
-
     command = command ? command.toLowerCase() : "help";
-
-    await _fsExtra2.default.ensureDir(BongoTool.dir);
+    await _fsExtra.default.ensureDir(BongoTool.dir);
     this.ensureCommands(["mongo", "mongostat"]);
 
     switch (command) {
@@ -446,12 +427,15 @@ Options:
 `);
           return 0;
         }
+
         if (this.args._[1] === "admin") {
           await this.usersAdmin();
         } else {
           await this.users(this.args._[1]);
         }
+
         break;
+
       case "backup":
         if (this.args.help) {
           this.log.info(`Usage: ${this.toolName} backup <db>
@@ -463,8 +447,10 @@ timestamped .archive file.
 `);
           return 0;
         }
+
         await this.backup(this.args._[1]);
         break;
+
       case "restore":
         if (this.args.help) {
           this.log.info(`Usage: ${this.toolName} restore <db> <archive>
@@ -475,8 +461,10 @@ Creates or overwrites the specified database with the given .archive file.
 `);
           return 0;
         }
+
         await this.restore(this.args._[1], this.args._[2]);
         break;
+
       case "mongo":
         if (this.args.help) {
           this.log.info(`Usage: ${this.toolName} mongo [online|offline]
@@ -493,8 +481,10 @@ Options:
 `);
           return 0;
         }
+
         await this.mongo(this.args.auth, this.args["bind-all"]);
         break;
+
       case "help":
       default:
         this.log.info(`
@@ -522,8 +512,12 @@ Global Options:
 
     return 0;
   }
+
 }
+
 exports.BongoTool = BongoTool;
-BongoTool.dir = _path2.default.join(_process2.default.env.HOME, ".bongo");
-BongoTool.credentialsFile = _path2.default.join(BongoTool.dir, "credentials.json5");
+
+_defineProperty(BongoTool, "dir", _path.default.join(_process.default.env.HOME, ".bongo"));
+
+_defineProperty(BongoTool, "credentialsFile", _path.default.join(BongoTool.dir, "credentials.json5"));
 //# sourceMappingURL=BongoTool.js.map
