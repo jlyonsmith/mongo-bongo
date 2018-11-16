@@ -38,6 +38,8 @@ function streamToString(readable) {
   })
 }
 
+const execAsync = promisify(cp.exec)
+
 export class BongoTool {
   constructor(toolName, log) {
     this.toolName = toolName
@@ -110,7 +112,7 @@ export class BongoTool {
     let hasSecurity = false
 
     try {
-      result = await promisify(cp.exec)('mongo --eval "db.getUsers()"')
+      result = await execAsync('mongo --eval "db.getUsers()"')
     } catch (error) {
       hasSecurity = true
     }
@@ -143,7 +145,7 @@ quit()
       )
 
       try {
-        result = await promisify(cp.exec)(
+        result = await execAsync(
           `mongo -u root -p ${
             credentials.admin.root
           } --authenticationDatabase admin --quiet ${tf.path}`
@@ -176,7 +178,7 @@ quit()
 `
     )
     try {
-      result = await promisify(cp.exec)(
+      result = await execAsync(
         `mongo -u root -p ${
           credentials.admin.root
         } --authenticationDatabase admin --quiet ${tf.path}`
@@ -216,7 +218,7 @@ quit()
     )
 
     try {
-      result = await promisify(cp.exec)(
+      result = await execAsync(
         `mongo -u root -p ${
           credentials.admin.root
         } --authenticationDatabase admin --quiet ${tf.path}`
@@ -242,7 +244,7 @@ quit()
     this.log.info("Adding root, backup and restore user to admin database")
 
     try {
-      result = await promisify(cp.exec)('mongo --eval "db.getUsers()" --quiet')
+      result = await execAsync('mongo --eval "db.getUsers()" --quiet')
     } catch (error) {
       this.log.error(
         "You must disable MongoDB security initialize the admin database"
@@ -270,7 +272,7 @@ quit()
 `
       )
       try {
-        result = await promisify(cp.exec)(`mongo ${tf.path} --quiet`)
+        result = await execAsync(`mongo ${tf.path} --quiet`)
       } catch (error) {
         this.log.error(
           `Unable to create 'root' database users. ${error.message}`
@@ -302,7 +304,7 @@ quit()
     )
 
     try {
-      result = await promisify(cp.exec)(`mongo ${tf.path} --quiet`)
+      result = await execAsync(`mongo ${tf.path} --quiet`)
     } catch (error) {
       this.log.error(
         `Unable to confirm existing 'admin' database users. ${error.message}`
@@ -338,7 +340,7 @@ quit()
 `
     )
     try {
-      result = await promisify(cp.exec)(`mongo ${tf.path} --quiet`)
+      result = await execAsync(`mongo ${tf.path} --quiet`)
     } catch (error) {
       this.log.error("Unable to change 'admin' database user passwords.")
       return
@@ -363,7 +365,7 @@ quit()
     const backupFile = `${dbName}-${dateTime}.archive`
 
     try {
-      const result = await promisify(cp.exec)(
+      const result = await execAsync(
         `mongodump --gzip --archive=${backupFile} --db ${dbName} -u backup -p ${
           passwords.backup
         } --authenticationDatabase=admin`
@@ -382,7 +384,7 @@ quit()
     const passwords = credentials.admin
 
     try {
-      const result = await promisify(cp.exec)(
+      const result = await execAsync(
         `mongorestore --gzip --archive=${backupFile} --drop --db ${dbName} -u restore -p ${
           passwords.restore
         } --authenticationDatabase=admin`
