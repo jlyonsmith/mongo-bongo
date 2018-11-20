@@ -59,6 +59,8 @@ function streamToString(readable) {
   });
 }
 
+const execAsync = (0, _util.promisify)(_child_process.default.exec);
+
 class BongoTool {
   constructor(toolName, log) {
     this.toolName = toolName;
@@ -126,7 +128,7 @@ class BongoTool {
     let hasSecurity = false;
 
     try {
-      result = await (0, _util.promisify)(_child_process.default.exec)('mongo --eval "db.getUsers()"');
+      result = await execAsync('mongo --eval "db.getUsers()"');
     } catch (error) {
       hasSecurity = true;
     }
@@ -151,7 +153,7 @@ quit()
 `);
 
       try {
-        result = await (0, _util.promisify)(_child_process.default.exec)(`mongo -u root -p ${credentials.admin.root} --authenticationDatabase admin --quiet ${tf.path}`);
+        result = await execAsync(`mongo -u root -p ${credentials.admin.root} --authenticationDatabase admin --quiet ${tf.path}`);
         this.log.info((await streamToString(result.stdout)));
       } catch (error) {
         this.log.error(`Unable to create '${dbName}' database users. ${error.message}`);
@@ -177,7 +179,7 @@ quit()
 `);
 
     try {
-      result = await (0, _util.promisify)(_child_process.default.exec)(`mongo -u root -p ${credentials.admin.root} --authenticationDatabase admin --quiet ${tf.path}`);
+      result = await execAsync(`mongo -u root -p ${credentials.admin.root} --authenticationDatabase admin --quiet ${tf.path}`);
       this.log.info((await streamToString(result.stdout)));
     } catch (error) {
       this.log.error(`Unable to confirm existing '${dbName}' database users. ${error.message}`);
@@ -204,7 +206,7 @@ quit()
 `);
 
     try {
-      result = await (0, _util.promisify)(_child_process.default.exec)(`mongo -u root -p ${credentials.admin.root} --authenticationDatabase admin --quiet ${tf.path}`);
+      result = await execAsync(`mongo -u root -p ${credentials.admin.root} --authenticationDatabase admin --quiet ${tf.path}`);
     } catch (error) {
       this.log.error(`Unable to change '${dbName}' database user passwords.`);
       return;
@@ -224,7 +226,7 @@ quit()
     this.log.info("Adding root, backup and restore user to admin database");
 
     try {
-      result = await (0, _util.promisify)(_child_process.default.exec)('mongo --eval "db.getUsers()" --quiet');
+      result = await execAsync('mongo --eval "db.getUsers()" --quiet');
     } catch (error) {
       this.log.error("You must disable MongoDB security initialize the admin database");
       return;
@@ -247,7 +249,7 @@ quit()
 `);
 
       try {
-        result = await (0, _util.promisify)(_child_process.default.exec)(`mongo ${tf.path} --quiet`);
+        result = await execAsync(`mongo ${tf.path} --quiet`);
       } catch (error) {
         this.log.error(`Unable to create 'root' database users. ${error.message}`);
         return;
@@ -274,7 +276,7 @@ quit()
 `);
 
     try {
-      result = await (0, _util.promisify)(_child_process.default.exec)(`mongo ${tf.path} --quiet`);
+      result = await execAsync(`mongo ${tf.path} --quiet`);
     } catch (error) {
       this.log.error(`Unable to confirm existing 'admin' database users. ${error.message}`);
       return;
@@ -304,7 +306,7 @@ quit()
 `);
 
     try {
-      result = await (0, _util.promisify)(_child_process.default.exec)(`mongo ${tf.path} --quiet`);
+      result = await execAsync(`mongo ${tf.path} --quiet`);
     } catch (error) {
       this.log.error("Unable to change 'admin' database user passwords.");
       return;
@@ -325,7 +327,15 @@ quit()
     const backupFile = `${dbName}-${dateTime}.archive`;
 
     try {
-      const result = await (0, _util.promisify)(_child_process.default.exec)(`mongodump --gzip --archive=${backupFile} --db ${dbName} -u backup -p ${passwords.backup} --authenticationDatabase=admin`);
+      let cmd = null;
+
+      if (credentials.backup) {
+        cmd = `mongodump --gzip --archive=${backupFile} --db ${dbName} -u backup -p ${passwords.backup} --authenticationDatabase=admin`;
+      } else {
+        cmd = `mongodump --gzip --archive=${backupFile} --db ${dbName}`;
+      }
+
+      const result = await execAsync(cmd);
       this.log.info((await streamToString(result.stdout)));
     } catch (error) {
       this.log.error(`Unable to backup database '${dbName}'. ${error.message}`);
@@ -335,19 +345,27 @@ quit()
     this.log.info(`MongoDB database '${dbName}' backed up to '${backupFile}'`);
   }
 
-  async restore(dbName, backupFile) {
+  async restore(archiveFilename) {
     const credentials = await this.readCredentials();
     const passwords = credentials.admin;
 
     try {
-      const result = await (0, _util.promisify)(_child_process.default.exec)(`mongorestore --gzip --archive=${backupFile} --drop --db ${dbName} -u restore -p ${passwords.restore} --authenticationDatabase=admin`);
+      let cmd = null;
+
+      if (credentials.restore) {
+        cmd = `mongorestore --gzip --archive=${archiveFilename} --drop -u restore -p ${passwords.restore} --authenticationDatabase=admin`;
+      } else {
+        cmd = `mongorestore --gzip --archive=${archiveFilename} --drop`;
+      }
+
+      const result = await execAsync(cmd);
       this.log.info((await streamToString(result.stdout)));
     } catch (error) {
       this.log.error(`Unable to restore database '${dbName}'. ${error.message}`);
       return;
     }
 
-    this.log.info(`MongoDB database '${dbName}' restored from '${backupFile}'`);
+    this.log.info(`MongoDB database restored from '${archiveFilename}'`);
   }
 
   async mongo(auth, bindAll) {
@@ -471,21 +489,34 @@ timestamped .archive file.
           return 0;
         }
 
-        await this.backup(this.args._[1]);
+        const dbName = this.args._[1];
+
+        if (!dbName) {
+          throw new Error(`Database name must be given`);
+        }
+
+        await this.backup(dbName);
         break;
 
       case "restore":
         if (this.args.help) {
-          this.log.info(`Usage: ${this.toolName} restore <db> <archive>
+          this.log.info(`Usage: ${this.toolName} restore <archive>
 
 Description:
 
-Creates or overwrites the specified database with the given .archive file.
+Restores the database in the given .archive file.  The database will be restored
+with the name it had when backed up.
 `);
           return 0;
         }
 
-        await this.restore(this.args._[1], this.args._[2]);
+        const archiveFilename = this.args._[1];
+
+        if (!archiveFilename) {
+          throw new Error(`Archive file name must be given`);
+        }
+
+        await this.restore(archiveFilename);
         break;
 
       case "mongo":
