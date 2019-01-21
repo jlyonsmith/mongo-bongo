@@ -25,6 +25,10 @@ const tool = new _BongoTool.BongoTool(_path.default.basename(process.argv[1], ".
 tool.run(process.argv.slice(2)).then(exitCode => {
   process.exitCode = exitCode;
 }).catch(err => {
-  console.error(err);
+  if (tool.debug) {
+    console.error(err);
+  }
+
+  log.info(err.message);
 });
 //# sourceMappingURL=bongo.js.map
