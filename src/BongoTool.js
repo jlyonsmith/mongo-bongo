@@ -12,31 +12,6 @@ import tmp from "tmp-promise"
 import { promisify } from "util"
 import moment from "moment"
 import yaml from "js-yaml"
-import stream from "stream"
-
-function streamToString(readable) {
-  if (!(readable instanceof stream.Readable)) {
-    return readable.toString()
-  }
-
-  return new Promise((resolve, reject) => {
-    let string = ""
-
-    readable.on("readable", (buffer) => {
-      string += buffer.read().toString()
-    })
-
-    readable.on("end", () => {
-      resolve(string)
-    })
-
-    readable.on("error", (error) => {
-      reject(error)
-    })
-
-    readable.pipe(writeable)
-  })
-}
 
 const execAsync = promisify(cp.exec)
 
@@ -96,7 +71,7 @@ export class BongoTool {
     await fs.writeFile(BongoTool.credentialsFile, json, { mode: 0o600 })
   }
 
-  async users(dbName) {
+  async users(dbName, newPassword) {
     let credentials = await this.readCredentials()
     let result, tf, passwords
 
@@ -150,7 +125,7 @@ quit()
             credentials.admin.root
           } --authenticationDatabase admin --quiet ${tf.path}`
         )
-        this.log.info(await streamToString(result.stdout))
+        this.log.info(result.stdout)
       } catch (error) {
         this.log.error(
           `Unable to create '${dbName}' database users. ${error.message}`
@@ -183,7 +158,7 @@ quit()
           credentials.admin.root
         } --authenticationDatabase admin --quiet ${tf.path}`
       )
-      this.log.info(await streamToString(result.stdout))
+      this.log.info(result.stdout)
     } catch (error) {
       this.log.error(
         `Unable to confirm existing '${dbName}' database users. ${
@@ -196,7 +171,7 @@ quit()
       tf = null
     }
 
-    if (!this.args["new-passwords"]) {
+    if (!newPassword) {
       this.log.info(
         `MongoDB '${dbName}' database users 'admin' & 'user' confirmed`
       )
@@ -237,7 +212,7 @@ quit()
     this.log.info(`MongoDB '${dbName}' database user passwords changed`)
   }
 
-  async usersAdmin() {
+  async usersAdmin(newPassword) {
     let credentials = await this.readCredentials()
     let result, tf, passwords
 
@@ -283,7 +258,7 @@ quit()
         tf = null
       }
 
-      this.log.info(await streamToString(result.stdout))
+      this.log.info(result.stdout)
 
       credentials.admin = passwords
       await this.writeCredentials(credentials)
@@ -315,9 +290,9 @@ quit()
       tf = null
     }
 
-    this.log.info(await streamToString(result.stdout))
+    this.log.info(result.stdout)
 
-    if (!this.args["new-passwords"]) {
+    if (!newPassword) {
       this.log.info(
         "MongoDB 'admin' database users 'root', 'backup' & 'restore' confirmed"
       )
@@ -355,57 +330,108 @@ quit()
     this.log.info("MongoDB 'admin' database user passwords changed")
   }
 
-  async backup(dbName) {
+  async backup(dbName, hostPort, newDbName, outputPath) {
     const credentials = await this.readCredentials()
     const passwords = credentials.admin
     const dateTime =
       moment()
         .utc()
         .format("YYYYMMDD-hhmmss") + "Z"
-    const backupFile = `${dbName}-${dateTime}.archive`
+    const backupFile = `${newDbName || dbName}-${dateTime}.tar.gz`
+
+    hostPort = parseInt(hostPort) || 27017
+    outputPath = outputPath || process.cwd()
+
+    if (!fs.lstatSync(outputPath).isDirectory()) {
+      throw new Error(`Output directory '${outputPath}' does not exist`)
+    }
+
+    this.ensureCommands(["mongodump", "tar"])
+    const tmpObj = await tmp.dir({ unsafeCleanup: true })
+    const dumpDir = path.join(tmpObj.path, "dump")
 
     try {
       let cmd = null
       if (credentials.backup) {
-        cmd = `mongodump --gzip --archive=${backupFile} --db ${dbName} -u backup -p ${
+        cmd = `mongodump --port ${hostPort} --out ${
+          tmpObj.path
+        } --db ${dbName} -u backup -p ${
           passwords.backup
         } --authenticationDatabase=admin`
       } else {
-        cmd = `mongodump --gzip --archive=${backupFile} --db ${dbName}`
+        cmd = `mongodump --port ${hostPort} --out ${dumpDir} --db ${dbName}`
       }
-      const result = await execAsync(cmd)
-      this.log.info(await streamToString(result.stdout))
+      let result = await execAsync(cmd)
+      this.log.info(result.stderr)
+
+      if (newDbName) {
+        // Rename the database directory
+        this.log.info(`Renaming database to '${newDbName}'`)
+        await fs.rename(
+          path.join(dumpDir, dbName),
+          path.join(dumpDir, newDbName)
+        )
+        dbName = newDbName
+      }
+
+      result = await execAsync(`tar -czvf ${backupFile} dump/*`, {
+        cwd: tmpObj.path,
+      })
+      await fs.move(
+        path.join(tmpObj.path, backupFile),
+        path.join(outputPath, backupFile)
+      )
     } catch (error) {
       this.log.error(`Unable to backup database '${dbName}'. ${error.message}`)
       return
+    } finally {
+      if (tmpObj) {
+        tmpObj.cleanup()
+      }
     }
 
     this.log.info(`MongoDB database '${dbName}' backed up to '${backupFile}'`)
   }
 
-  async restore(archiveFilename) {
+  async restore(archiveFilename, hostPort) {
     const credentials = await this.readCredentials()
     const passwords = credentials.admin
 
+    this.ensureCommands(["mongorestore", "tar"])
+    archiveFilename = path.resolve(archiveFilename)
+
+    hostPort = parseInt(hostPort) || 27017
+    const tmpObj = await tmp.dir({ unsafeCleanup: true })
+
     try {
+      let result = await execAsync(`tar -x -f ${archiveFilename}`, {
+        cwd: tmpObj.path,
+      })
+
       let cmd = null
 
       if (credentials.restore) {
-        cmd = `mongorestore --gzip --archive=${archiveFilename} --drop -u restore -p ${
+        cmd = `mongorestore --port ${hostPort} --drop -u restore -p ${
           passwords.restore
-        } --authenticationDatabase=admin`
+        } --authenticationDatabase=admin dump/`
       } else {
-        cmd = `mongorestore --gzip --archive=${archiveFilename} --drop`
+        cmd = `mongorestore --port ${hostPort} --drop dump/`
       }
 
-      const result = await execAsync(cmd)
-      this.log.info(await streamToString(result.stdout))
+      result = await execAsync(cmd, { cwd: tmpObj.path })
+      this.log.info(result.stdout)
     } catch (error) {
-      this.log.error(`Unable to restore database '${dbName}'. ${error.message}`)
+      this.log.error(
+        `Unable to restore archive file '${archiveFilename}'. ${error.message}`
+      )
       return
+    } finally {
+      if (tmpObj) {
+        tmpObj.cleanup()
+      }
     }
 
-    this.log.info(`MongoDB database restored from '${archiveFilename}'`)
+    this.log.info(`MongoDB database(s) restored from '${archiveFilename}'`)
   }
 
   async mongo(auth, bindAll) {
@@ -453,7 +479,7 @@ quit()
         return
       }
 
-      if (!(await streamToString(result.stdout)).match(/Ubuntu 1(6|8)\./)) {
+      if (!result.stdout.match(/Ubuntu 1(6|8)\./)) {
         this.log.warning("This release of Linux has not been tested")
       }
 
@@ -486,31 +512,41 @@ quit()
 
   async run(argv) {
     const options = {
-      boolean: ["help", "version", "new-passwords", "auth", "bind-all"],
+      string: ["port", "new-name", "output"],
+      boolean: [
+        "help",
+        "version",
+        "new-passwords",
+        "auth",
+        "bind-all",
+        "debug",
+      ],
     }
-    this.args = parseArgs(argv, options)
+    const args = parseArgs(argv, options)
 
-    if (this.args.version) {
+    if (args.version) {
       this.log.info(`${fullVersion}`)
       return 0
     }
 
-    let command = this.args._[0]
+    let command = args._[0]
 
     command = command ? command.toLowerCase() : "help"
+
+    this.debug = !!args.debug
 
     await fs.ensureDir(BongoTool.dir)
     this.ensureCommands(["mongo", "mongostat"])
 
     switch (command) {
       case "users":
-        if (this.args.help) {
+        if (args.help) {
           this.log.info(`Usage: ${this.toolName} users [db]
 
 Description:
 
 Ensures that the users 'admin' & 'user' exist on regular database, and 'root',
-'backup' & 'restore' if the 'admin' database is specified.
+or 'backup' & 'restore' users if the 'admin' database is specified.
 
 Options:
 
@@ -518,52 +554,67 @@ Options:
 `)
           return 0
         }
-        if (this.args._[1] === "admin") {
-          await this.usersAdmin()
+        if (args._[1] === "admin") {
+          await this.usersAdmin(args["new-passwords"])
         } else {
-          await this.users(this.args._[1])
+          await this.users(args._[1], args["new-passwords"])
         }
         break
       case "backup":
-        if (this.args.help) {
-          this.log.info(`Usage: ${this.toolName} backup <db>
+        if (args.help) {
+          this.log.info(`Usage: ${this.toolName} backup <options> <db>
 
 Description:
 
 Backs up all non-system collections in the given database creating a
-timestamped .archive file.
+timestamped .tar.gz file.
+
+Options:
+
+--port          Host port, for when there are multiple mongod instances
+--new-name      Rename the database when backing it up
+--output        Output directory or filename for archive file
 `)
           return 0
         }
-        const dbName = this.args._[1]
+        const dbName = args._[1]
 
         if (!dbName) {
           throw new Error(`Database name must be given`)
         }
 
-        await this.backup(dbName)
+        await this.backup(
+          dbName,
+          args["port"],
+          args["new-name"],
+          args["output"]
+        )
         break
       case "restore":
-        if (this.args.help) {
-          this.log.info(`Usage: ${this.toolName} restore <archive>
+        if (args.help) {
+          this.log.info(`Usage: ${this.toolName} restore <options> <archive>
 
 Description:
 
-Restores the database in the given .archive file.  The database will be restored
+Restores the database in the given .tar.gz file.  The database will be restored
 with the name it had when backed up.
+
+Options:
+
+--port       Host port, for when there are multiple mongod instances
 `)
           return 0
         }
-        const archiveFilename = this.args._[1]
+        const archiveFilename = args._[1]
 
         if (!archiveFilename) {
           throw new Error(`Archive file name must be given`)
         }
 
-        await this.restore(archiveFilename)
+        await this.restore(archiveFilename, args["port"])
         break
       case "mongo":
-        if (this.args.help) {
+        if (args.help) {
           this.log.info(`Usage: ${this.toolName} mongo [online|offline]
 
 Description:
@@ -578,7 +629,7 @@ Options:
 `)
           return 0
         }
-        await this.mongo(this.args.auth, this.args["bind-all"])
+        await this.mongo(args.auth, args["bind-all"])
         break
       case "help":
       default:

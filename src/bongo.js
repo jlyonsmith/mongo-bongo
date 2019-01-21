@@ -24,5 +24,9 @@ tool
     process.exitCode = exitCode
   })
   .catch((err) => {
-    console.error(err)
+    if (tool.debug) {
+      console.error(err)
+    }
+
+    log.info(err.message)
   })

@@ -62,6 +62,6 @@
     "moment": "^2.22.1",
     "randomatic": "^3.0.0",
     "snap-tool": "^1.4.0",
-    "tmp-promise": "^1.0.4"
+    "tmp-promise": "^1.0.5"
   }
 }
